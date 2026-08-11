@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Resume Matcher</title>
+<style>
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    max-width: 700px;
+    margin: 40px auto;
+    padding: 0 20px;
+    background: #f7f7f8;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 28px; margin-bottom: 4px; }
+  p.subtitle { color: #666; margin-top: 0; }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    margin-bottom: 20px;
+  }
+  label { font-weight: 600; display: block; margin-bottom: 6px; margin-top: 16px; }
+  textarea, input[type=file] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  textarea { resize: vertical; min-height: 120px; font-family: inherit; }
+  button {
+    margin-top: 20px;
+    background: #1a1a1a;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  button:hover { background: #333; }
+  button:disabled { background: #999; cursor: not-allowed; }
+  #results { display: none; }
+  .score {
+    font-size: 42px;
+    font-weight: 700;
+    color: #16a34a;
+  }
+  .skill-tag {
+    display: inline-block;
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin: 4px 4px 0 0;
+  }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  #loading { display: none; color: #666; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<h1>AI Resume Matcher</h1>
+<p class="subtitle">Upload a resume and a job description to see how well they match.</p>
+
+<div class="card">
+  <label>Resume (PDF)</label>
+  <input type="file" id="resumeFile" accept=".pdf">
+
+  <label>Job Description</label>
+  <textarea id="jobDescription" placeholder="Paste the job description here..."></textarea>
+
+  <button id="analyzeBtn" onclick="analyzeResume()">Analyze Match</button>
+  <div id="loading">Analyzing... this may take a moment.</div>
+</div>
+
+<div class="card" id="results">
+  <div class="score" id="scoreDisplay"></div>
+  <p id="explanation"></p>
+
+  <div id="missingSkillsSection">
+    <label>Missing Skills</label>
+    <div id="missingSkills"></div>
+  </div>
+
+  <label>Suggested Interview Questions</label>
+  <ul id="interviewQuestions"></ul>
+</div>
+
+<script>
+const API_URL = "http://127.0.0.1:8000";
+
+async function analyzeResume() {
+  const fileInput = document.getElementById('resumeFile');
+  const jobDescription = document.getElementById('jobDescription').value.trim();
+  const btn = document.getElementById('analyzeBtn');
+  const loading = document.getElementById('loading');
+  const results = document.getElementById('results');
+
+  if (!fileInput.files.length) {
+    alert("Please upload a PDF resume first.");
+    return;
+  }
+  if (!jobDescription) {
+    alert("Please paste a job description.");
+    return;
+  }
+
+  btn.disabled = true;
+  loading.style.display = "block";
+  results.style.display = "none";
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  formData.append("job_description", jobDescription);
+
+  try {
+    const response = await fetch(`${API_URL}/analyze`, {
+      method: "POST",
+      body: formData
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || "Something went wrong");
+    }
+
+    const data = await response.json();
+
+    document.getElementById('scoreDisplay').textContent = data.match_score + " / 100";
+    document.getElementById('explanation').textContent = data.explanation;
+
+    const missingDiv = document.getElementById('missingSkills');
+    missingDiv.innerHTML = "";
+    if (data.missing_skills && data.missing_skills.length > 0) {
+      data.missing_skills.forEach(skill => {
+        const tag = document.createElement('span');
+        tag.className = 'skill-tag';
+        tag.textContent = skill;
+        missingDiv.appendChild(tag);
+      });
+      document.getElementById('missingSkillsSection').style.display = "block";
+    } else {
+      document.getElementById('missingSkillsSection').style.display = "none";
+    }
+
+    const questionsList = document.getElementById('interviewQuestions');
+    questionsList.innerHTML = "";
+    (data.interview_questions || []).forEach(q => {
+      const li = document.createElement('li');
+      li.textContent = q;
+      questionsList.appendChild(li);
+    });
+
+    results.style.display = "block";
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    loading.style.display = "none";
+  }
+}
+</script>
+
+</body>
+</html>
